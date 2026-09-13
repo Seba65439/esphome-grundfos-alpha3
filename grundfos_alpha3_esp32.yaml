@@ -1,0 +1,261 @@
+substitutions:
+  name: "grundfos-alpha3-controller"
+  friendly_name: "Pompa Grundfos ALPHA3"
+  # ==============================================================================
+  # IMPORTANT / WAŻNE: Enter your pump's real BLE MAC address below!
+  # If you do not know it, flash ESP32 with this code, open ESPHome Log Viewer
+  # and press the connect button on your pump - the logs will display:
+  # ">>> ZNALEZIONO POMPĘ GRUNDFOS! Adres MAC: XX:XX:XX:XX:XX:XX <<<"
+  # ==============================================================================
+  pump_mac_address: "B4:E6:2D:XX:XX:XX"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-c3-devkitm-1
+  variant: esp32c3
+  framework:
+    type: arduino
+
+# Poziom logów DEBUG jest kluczowy, aby widzieć wykryte urządzenia BLE i komunikaty parowania
+logger:
+  level: INFO
+  logs:
+    grundfos_alpha3: DEBUG
+
+api:
+  # encryption:
+  #   key: "" # Opcjonalny klucz szyfrowania Home Assistant
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "TWOJA_NAZWA_WIFI"
+  password: "TWOJE_HASLO_WIFI"
+  fast_connect: true
+  power_save_mode: none  # Kluczowe przy BLE: zapobiega usypianiu modemu WiFi i zrywaniu sesji API
+
+  # Fallback AP w razie braku sieci domowej
+  ap:
+    ssid: "Grundfos-Alpha3-Fallback"
+    password: "grundfospassword"
+
+captive_portal:
+
+# Ścieżka do lokalnego komponentu
+external_components:
+  - source: components
+    components: [ grundfos_alpha3 ]
+
+# Konfiguracja stosu bezpieczeństwa BLE ESP32 (Wymagana do parowania i szyfrowania z pompą ALPHA3)
+esp32_ble:
+  io_capability: none
+
+# Zrównoważone parametry skanera BLE (daje 800ms z każdych 1100ms wyłącznie dla radia Wi-Fi)
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 1100ms
+    window: 300ms
+    active: false
+
+# Konfiguracja klienta BLE dla pompy Grundfos ALPHA3
+ble_client:
+  - mac_address: ${pump_mac_address}
+    id: alpha3_ble
+    auto_connect: true
+    # Automatyczne potwierdzanie żądań parowania SMP (Just Works / Numeric Comparison)
+    on_numeric_comparison_request:
+      - then:
+          - ble_client.numeric_comparison_reply:
+              id: alpha3_ble
+              accept: true
+    on_passkey_request:
+      - then:
+          - ble_client.passkey_reply:
+              id: alpha3_ble
+              passkey: 0
+
+# Główna konfiguracja węzła pompy Grundfos ALPHA3
+grundfos_alpha3:
+  id: pump_alpha3
+  ble_client_id: alpha3_ble
+  update_interval: 10s
+
+# ==============================================================================
+# PRZYCISKI: WYMUSZENIE PAROWANIA I RESET WIĘZI BLE
+# ==============================================================================
+button:
+  - platform: grundfos_alpha3
+    grundfos_alpha3_id: pump_alpha3
+    pair_pump:
+      name: "${friendly_name} Paruj pompę (Naciśnij przycisk na pompie)"
+      id: pump_pair_button
+      icon: "mdi:bluetooth-connect"
+    unpair_pump:
+      name: "${friendly_name} Usuń sparowanie (Reset BLE)"
+      id: pump_unpair_button
+      icon: "mdi:bluetooth-off"
+
+# ==============================================================================
+# SENSORY TELEMETRII (Odczyt parametrów pompy)
+# ==============================================================================
+sensor:
+  - platform: grundfos_alpha3
+    grundfos_alpha3_id: pump_alpha3
+    
+    power:
+      name: "${friendly_name} Pobór mocy"
+      id: pump_power_sensor
+      icon: "mdi:flash"
+      
+    speed:
+      name: "${friendly_name} Prędkość obrotowa"
+      id: pump_speed_sensor
+      icon: "mdi:fan"
+      
+    flow:
+      name: "${friendly_name} Przepływ"
+      id: pump_flow_sensor
+      icon: "mdi:water-pump"
+      
+    head:
+      name: "${friendly_name} Wysokość podnoszenia"
+      id: pump_head_sensor
+      icon: "mdi:arrow-up-down"
+      
+    current_setpoint:
+      name: "${friendly_name} Aktualna nastawa"
+      id: pump_current_setpoint_sensor
+      icon: "mdi:target"
+      
+    energy:
+      name: "${friendly_name} Całkowite zużycie energii"
+      id: pump_energy_sensor
+      icon: "mdi:counter"
+      
+    voltage:
+      name: "${friendly_name} Napięcie zasilania"
+      id: pump_voltage_sensor
+      icon: "mdi:sine-wave"
+      
+    current:
+      name: "${friendly_name} Prąd silnika"
+      id: pump_current_sensor
+      icon: "mdi:current-ac"
+      
+    shaft_power:
+      name: "${friendly_name} Moc mechaniczna na wale"
+      id: pump_shaft_power_sensor
+      icon: "mdi:engine"
+      
+    temp_electronics:
+      name: "${friendly_name} Temp. modułu sterującego"
+      id: pump_temp_electronics_sensor
+      icon: "mdi:thermometer-chip"
+      
+    temp_motor:
+      name: "${friendly_name} Temp. uzwojeń silnika"
+      id: pump_temp_motor_sensor
+      icon: "mdi:thermometer"
+      
+    temp_liquid:
+      name: "${friendly_name} Temp. pompowanej wody"
+      id: pump_temp_liquid_sensor
+      icon: "mdi:thermometer-water"
+      
+    alarm_code:
+      name: "${friendly_name} Kod alarmu"
+      id: pump_alarm_code_sensor
+      icon: "mdi:alert-circle-outline"
+
+# ==============================================================================
+# SENSORY BINARNE (Stany logiczne)
+# ==============================================================================
+binary_sensor:
+  - platform: grundfos_alpha3
+    grundfos_alpha3_id: pump_alpha3
+    
+    pump_running:
+      name: "${friendly_name} Stan pracy silnika"
+      id: pump_running_state
+      icon: "mdi:pump"
+
+    pump_paired:
+      name: "${friendly_name} Status sparowania BLE"
+      id: pump_paired_state
+      icon: "mdi:bluetooth-connect"
+
+# ==============================================================================
+# SENSORY TEKSTOWE (Status, opisy alarmów, tryby pracy)
+# ==============================================================================
+text_sensor:
+  - platform: grundfos_alpha3
+    grundfos_alpha3_id: pump_alpha3
+    
+    operating_mode:
+      name: "${friendly_name} Stan pracy (Operating Mode)"
+      id: pump_operating_mode_text
+      icon: "mdi:state-machine"
+      
+    control_mode:
+      name: "${friendly_name} Tryb regulacji (Control Mode)"
+      id: pump_control_mode_text
+      icon: "mdi:tune-vertical"
+      
+    alarm_status:
+      name: "${friendly_name} Status błędu i alarmu"
+      id: pump_alarm_status_text
+      icon: "mdi:alert"
+      
+    pump_name:
+      name: "${friendly_name} Nazwa urządzenia"
+      id: pump_device_name_text
+      icon: "mdi:tag-text-outline"
+
+# ==============================================================================
+# STEROWANIE: PRZEŁĄCZNIK ZASILANIA (ON / OFF)
+# ==============================================================================
+switch:
+  - platform: grundfos_alpha3
+    grundfos_alpha3_id: pump_alpha3
+    pump_power:
+      name: "${friendly_name} Włącznik pompy ON-OFF"
+      id: pump_main_switch
+      icon: "mdi:power"
+
+  - platform: ble_client
+    ble_client_id: alpha3_ble
+    name: "${friendly_name} Połączenie BLE z pompą"
+    id: pump_ble_connection_switch
+    icon: "mdi:bluetooth-connect"
+
+# ==============================================================================
+# STEROWANIE: WYBÓR TRYBU PRACY I REGULACJI
+# ==============================================================================
+select:
+  - platform: grundfos_alpha3
+    grundfos_alpha3_id: pump_alpha3
+    
+    operating_mode:
+      name: "${friendly_name} Wybór stanu pracy"
+      id: pump_operating_mode_select
+      icon: "mdi:format-list-bulleted"
+      
+    control_mode:
+      name: "${friendly_name} Wybór trybu regulacji"
+      id: pump_control_mode_select
+      icon: "mdi:tune-vertical"
+
+# ==============================================================================
+# STEROWANIE: NASTAWA WYDAJNOŚCI / WYSOKOŚCI PODNOSZENIA (W METRACH)
+# ==============================================================================
+number:
+  - platform: grundfos_alpha3
+    grundfos_alpha3_id: pump_alpha3
+    setpoint:
+      name: "${friendly_name} Zadana wysokość podnoszenia (Nastawa)"
+      id: pump_setpoint_slider
+      icon: "mdi:arrow-up-down"

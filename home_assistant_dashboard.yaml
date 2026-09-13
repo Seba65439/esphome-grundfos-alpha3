@@ -1,0 +1,284 @@
+# ==============================================================================
+# PEŁNOWYMIAROWY, PRZESTRZENNY DASHBOARD DLA POMPY GRUNDFOS ALPHA3
+# ==============================================================================
+# 100% NATYWNE KARTY HOME ASSISTANT - DUŻE ZEGARY GAUGE, CZYTELNE STEROWANIE
+# Zaprojektowany pod dużą ilość miejsca na ekranie (duże monitory, tablety ścienne).
+#
+# Zawiera:
+# 1. Górny pasek odznak (Badges) ze statusem na żywo
+# 2. Główny rząd 3 dużych zegarów GAUGE (Podnoszenie do 5.0m, Przepływ, Pobór mocy)
+# 3. Drugi rząd 3 zegarów GAUGE (Temp. wody, Obroty RPM, Moc mechaniczna na wale)
+# 4. Przestronny panel sterowania (Zasilanie, Suwak wydajności, Wybór trybów)
+# 5. Kafelki diagnostyki zasilania i temperatur podzespołów
+# 6. Duży, pełnowymiarowy wykres telemetryczny w czasie rzeczywistym
+# 7. Moduł łączności i parowania Bluetooth BLE
+# ==============================================================================
+# INSTRUKCJA DODANIA DO HOME ASSISTANT:
+# 1. W Home Assistant otwórz swój pulpit (Dashboard).
+# 2. W prawym górnym rogu kliknij ikonę ołówka (Edytuj pulpit).
+# 3. Na górnym pasku kliknij plus (+) "Dodaj widok" (nową zakładkę).
+# 4. W prawym górnym rogu okna dialogowego kliknij trzy kropki -> "Edytuj w YAML".
+# 5. Wklej całą poniższą zawartość i kliknij "Zapisz".
+# ==============================================================================
+
+title: Pompa Grundfos ALPHA3
+path: pompa-grundfos
+icon: mdi:pump
+badges:
+  - entity: binary_sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_stan_pracy_silnika
+    name: Silnik
+    color: green
+  - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_pobor_mocy
+    name: Moc czynna
+    color: amber
+  - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_przeplyw
+    name: Przepływ
+    color: teal
+  - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_wysokosc_podnoszenia
+    name: Podnoszenie
+    color: cyan
+  - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_temp_pompowanej_wody
+    name: Woda C.O.
+    color: red
+  - entity: binary_sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_status_sparowania_ble
+    name: BLE Bonded
+    color: blue
+
+cards:
+  # ============================================================================
+  # 1. WARUNKOWY BANER ALARMOWY (Pojawia się TYLKO w razie błędu)
+  # ============================================================================
+  - type: conditional
+    conditions:
+      - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_kod_alarmu
+        state_not: "0"
+    card:
+      type: markdown
+      content: >-
+        # ⚠️ ALARM POMPY GRUNDFOS ALPHA3!
+        **Kod błędu:** `{{ states('sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_kod_alarmu') }}` &bull; 
+        **Komunikat:** **{{ states('sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_status_bledu_i_alarmu') }}**  
+        > *Sprawdź stan obiegu grzewczego: brak wody (suchobieg), zablokowany wirnik lub problem z napięciem zasilania.*
+
+  # ============================================================================
+  # 2. GŁÓWNE ZEGARY HYDRAULICZNE I ENERGETYCZNE (DUŻE ZEGARY GAUGE)
+  # ============================================================================
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      # ZEGAR 1: WYSOKOŚĆ PODNOSZENIA (DO 5.0m)
+      - type: gauge
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_wysokosc_podnoszenia
+        name: Wysokość podnoszenia (H)
+        unit: m
+        min: 0
+        max: 5
+        needle: true
+        severity:
+          green: 0.5
+          yellow: 3.5
+          red: 4.5
+
+      # ZEGAR 2: PRZEPŁYW WODY
+      - type: gauge
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_przeplyw
+        name: Przepływ wody (Q)
+        unit: m³/h
+        min: 0
+        max: 3.5
+        needle: true
+        severity:
+          green: 0.3
+          yellow: 2.0
+          red: 2.8
+
+      # ZEGAR 3: POBÓR MOCY ELEKTRYCZNEJ
+      - type: gauge
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_pobor_mocy
+        name: Pobór mocy elektrycznej
+        unit: W
+        min: 0
+        max: 50
+        needle: true
+        severity:
+          green: 0
+          yellow: 25
+          red: 40
+
+  # ============================================================================
+  # 3. DRUGI RZĄD ZEGARÓW: TEMPERATURA, OBROTY I MOC WAŁU
+  # ============================================================================
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      # ZEGAR 4: TEMPERATURA WODY W INSTALACJI
+      - type: gauge
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_temp_pompowanej_wody
+        name: Temperatura wody C.O.
+        unit: °C
+        min: 10
+        max: 90
+        needle: true
+        severity:
+          green: 20
+          yellow: 60
+          red: 75
+
+      # ZEGAR 5: PRĘDKOŚĆ OBROTOWA WIRNIKA
+      - type: gauge
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_predkosc_obrotowa
+        name: Prędkość wirnika
+        unit: RPM
+        min: 0
+        max: 4500
+        needle: true
+        severity:
+          green: 1000
+          yellow: 3500
+          red: 4200
+
+      # ZEGAR 6: MOC MECHANICZNA NA WALE
+      - type: gauge
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_moc_mechaniczna_na_wale
+        name: Moc mechaniczna na wale
+        unit: W
+        min: 0
+        max: 35
+        needle: true
+        severity:
+          green: 0
+          yellow: 18
+          red: 28
+
+  # ============================================================================
+  # 4. DUŻE CENTRUM STEROWANIA I REGULACJI WYDAJNOŚCI
+  # ============================================================================
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      # LEWY PANEL: ZASILANIE I NASTAWA WYSOKOŚCI
+      - type: entities
+        title: Nastawa wydajności i zasilanie
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: switch.pompa_grundfos_alpha3_pompa_grundfos_alpha3_wlacznik_pompy_on_off
+            name: Zasilanie główne pompy
+            icon: mdi:power
+          - entity: number.pompa_grundfos_alpha3_pompa_grundfos_alpha3_zadana_wysokosc_podnoszenia_nastawa
+            name: Zadana wysokość podnoszenia H (max 5.0m)
+            icon: mdi:arrow-up-down
+          - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_aktualna_nastawa
+            name: Aktualna nastawa robocza
+            icon: mdi:target
+          - entity: binary_sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_stan_pracy_silnika
+            name: Status pracy silnika
+            icon: mdi:pump
+
+      # PRAWY PANEL: TRYBY REGULACJI I BIEGI
+      - type: entities
+        title: Tryby pracy i regulacji
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: select.pompa_grundfos_alpha3_pompa_grundfos_alpha3_wybor_trybu_regulacji
+            name: Tryb regulacji charakterystyki
+            icon: mdi:tune-vertical
+          - entity: select.pompa_grundfos_alpha3_pompa_grundfos_alpha3_wybor_stanu_pracy
+            name: Wybór biegu (Normalny / Min / Maks / Stop)
+            icon: mdi:speedometer
+          - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_tryb_regulacji_control_mode
+            name: Aktywny tryb regulacji (odczyt)
+            icon: mdi:information-outline
+          - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_stan_pracy_operating_mode
+            name: Aktywny stan pracy (odczyt)
+            icon: mdi:state-machine
+
+  # ============================================================================
+  # 5. DIAGNOSTYKA ELEKTRYCZNA I TEMPERATURY PODZESPOŁÓW
+  # ============================================================================
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: tile
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_napiecie_zasilania
+        name: Napięcie sieci
+        icon: mdi:sine-wave
+        color: indigo
+      - type: tile
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_prad_silnika
+        name: Prąd pobierany
+        icon: mdi:current-ac
+        color: purple
+      - type: tile
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_temp_uzwojen_silnika
+        name: Temp. uzwojeń silnika
+        icon: mdi:thermometer
+        color: orange
+      - type: tile
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_temp_modulu_sterujacego
+        name: Temp. falownika
+        icon: mdi:thermometer-chip
+        color: blue-grey
+      - type: tile
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_calkowite_zuzycie_energii
+        name: Sumaryczny licznik
+        icon: mdi:counter
+        color: teal
+      - type: tile
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_nazwa_urzadzenia
+        name: Nazwa urządzenia
+        icon: mdi:tag-text-outline
+        color: blue
+      - type: tile
+        entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_status_bledu_i_alarmu
+        name: Status alarmu
+        icon: mdi:alert-circle-check
+        color: green
+      - type: tile
+        entity: binary_sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_status_sparowania_ble
+        name: Status BLE SMP
+        icon: mdi:bluetooth-connect
+        color: light-blue
+
+  # ============================================================================
+  # 6. DUŻY WYKRES TELEMETRYCZNY W CZASIE RZECZYWISTYM (PEŁNA SZEROKOŚĆ - 12H)
+  # ============================================================================
+  - type: history-graph
+    title: Przebieg parametrów hydraulicznych i zużycia energii w czasie (ostatnie 12 godzin)
+    hours_to_show: 12
+    refresh_interval: 15
+    entities:
+      - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_wysokosc_podnoszenia
+        name: Wysokość podnoszenia H (m)
+      - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_przeplyw
+        name: Przepływ wody Q (m³/h)
+      - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_pobor_mocy
+        name: Pobór mocy elektrycznej (W)
+      - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_temp_pompowanej_wody
+        name: Temperatura wody C.O. (°C)
+
+  # ============================================================================
+  # 7. PANEL ZARZĄDZANIA ŁĄCZNOŚCIĄ I BEZPIECZEŃSTWEM BLUETOOTH
+  # ============================================================================
+  - type: entities
+    title: Łączność Bluetooth i parowanie z pompą
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: switch.pompa_grundfos_alpha3_pompa_grundfos_alpha3_polaczenie_ble_z_pompa
+        name: Aktywne połączenie Bluetooth z pompą
+        icon: mdi:bluetooth
+      - entity: binary_sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_status_sparowania_ble
+        name: Powiązanie kryptograficzne w pamięci NVS ESP32 (Bonded)
+        icon: mdi:security
+      - entity: button.pompa_grundfos_alpha3_pompa_grundfos_alpha3_paruj_pompe_nacisnij_przycisk_na_pompie
+        name: 1. Kliknij tutaj, aby sparować (i naciśnij przycisk na pompie)
+        icon: mdi:bluetooth-connect
+      - entity: button.pompa_grundfos_alpha3_pompa_grundfos_alpha3_usun_sparowanie_reset_ble
+        name: 2. Resetuj sparowanie BLE (Usunięcie zapamiętanego klucza)
+        icon: mdi:bluetooth-off

@@ -1,0 +1,25 @@
+# ESPHome build files & caches
+.esphome/
+*.bin
+*.elf
+*.hex
+
+# Home Assistant / ESPHome secrets
+secrets.yaml
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs & temp files
+*.log
+tmp/
+
+# Operating System & IDE artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
