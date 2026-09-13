@@ -172,7 +172,7 @@ If you want to incorporate this component into your existing ESPHome configurati
 
 ```yaml
 external_components:
-  - source: github://your-github-username/esphome-grundfos-alpha3
+  - source: github://Seba65439/esphome-grundfos-alpha3
     components: [ grundfos_alpha3 ]
 
 esp32_ble:

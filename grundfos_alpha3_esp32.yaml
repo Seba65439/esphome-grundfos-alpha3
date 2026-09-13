@@ -45,10 +45,13 @@ wifi:
 
 captive_portal:
 
-# Ścieżka do lokalnego komponentu
+# Źródło komponentu Grundfos ALPHA3 (repozytorium GitHub lub folder lokalny)
 external_components:
-  - source: components
+  - source: github://Seba65439/esphome-grundfos-alpha3
     components: [ grundfos_alpha3 ]
+  # Jeśli testujesz lub rozwijasz komponent lokalnie, odkomentuj poniższe:
+  # - source: components
+  #   components: [ grundfos_alpha3 ]
 
 # Konfiguracja stosu bezpieczeństwa BLE ESP32 (Wymagana do parowania i szyfrowania z pompą ALPHA3)
 esp32_ble:

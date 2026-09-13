@@ -147,6 +147,17 @@ wifi:
    [I][grundfos_alpha3]: SUKCES! Pompa Grundfos ALPHA3 sparowana i połączenie zaszyfrowane!
    ```
 5. Od tej chwili w Home Assistant pojawią się wszystkie encje: moc, przepływ, podnoszenie, temperatura, przełącznik i suwaki!
+---
+
+## 📦 Użycie jako zewnętrzny komponent w istniejącej konfiguracji
+
+Możesz dodać ten komponent bezpośrednio do swojego istniejącego pliku YAML ESPHome, bez konieczności pobierania plików:
+
+```yaml
+external_components:
+  - source: github://Seba65439/esphome-grundfos-alpha3
+    components: [ grundfos_alpha3 ]
+```
 
 ---
 
