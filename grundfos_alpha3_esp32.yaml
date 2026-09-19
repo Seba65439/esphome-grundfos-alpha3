@@ -43,7 +43,8 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   fast_connect: true
-  power_save_mode: none  # Kluczowe przy BLE: zapobiega usypianiu modemu WiFi i zrywaniu sesji API
+  # Przy jednoczesnym Wi-Fi i BLE ESP-IDF wymaga modem sleep - "none" powoduje okresowe zrywanie Wi-Fi
+  power_save_mode: light
 
   # Fallback AP w razie braku sieci domowej
   ap:
