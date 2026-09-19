@@ -52,6 +52,10 @@ cards:
     conditions:
       - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_kod_alarmu
         state_not: "0"
+      - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_kod_alarmu
+        state_not: "unknown"
+      - entity: sensor.pompa_grundfos_alpha3_pompa_grundfos_alpha3_kod_alarmu
+        state_not: "unavailable"
     card:
       type: markdown
       content: >-

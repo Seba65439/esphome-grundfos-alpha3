@@ -1,7 +1,9 @@
 #pragma once
 
+#ifdef USE_ESP32
+
 #include "esphome/core/component.h"
-#include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
 #include "esphome/components/ble_client/ble_client.h"
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
 #include "esphome/components/sensor/sensor.h"
@@ -12,74 +14,55 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/button/button.h"
 
-#include <vector>
-#include <string>
 #include <deque>
+#include <string>
+#include <vector>
 
-namespace esphome {
-namespace grundfos_alpha3 {
+namespace esphome::grundfos_alpha3 {
 
 class GrundfosAlpha3;
 
-class GrundfosAlpha3PowerSwitch : public switch_::Switch, public Component {
- public:
-  void set_parent(GrundfosAlpha3 *parent) { parent_ = parent; }
+class GrundfosAlpha3PowerSwitch : public switch_::Switch, public Parented<GrundfosAlpha3> {
  protected:
   void write_state(bool state) override;
-  GrundfosAlpha3 *parent_{nullptr};
 };
 
-class GrundfosAlpha3OperatingModeSelect : public select::Select, public Component {
- public:
-  void set_parent(GrundfosAlpha3 *parent) { parent_ = parent; }
+class GrundfosAlpha3OperatingModeSelect : public select::Select, public Parented<GrundfosAlpha3> {
  protected:
   void control(const std::string &value) override;
-  GrundfosAlpha3 *parent_{nullptr};
 };
 
-class GrundfosAlpha3ControlModeSelect : public select::Select, public Component {
- public:
-  void set_parent(GrundfosAlpha3 *parent) { parent_ = parent; }
+class GrundfosAlpha3ControlModeSelect : public select::Select, public Parented<GrundfosAlpha3> {
  protected:
   void control(const std::string &value) override;
-  GrundfosAlpha3 *parent_{nullptr};
 };
 
-class GrundfosAlpha3SetpointNumber : public number::Number, public Component {
- public:
-  void set_parent(GrundfosAlpha3 *parent) { parent_ = parent; }
+class GrundfosAlpha3SetpointNumber : public number::Number, public Parented<GrundfosAlpha3> {
  protected:
   void control(float value) override;
-  GrundfosAlpha3 *parent_{nullptr};
 };
 
-class GrundfosAlpha3PairButton : public button::Button, public Component {
- public:
-  void set_parent(GrundfosAlpha3 *parent) { parent_ = parent; }
+class GrundfosAlpha3PairButton : public button::Button, public Parented<GrundfosAlpha3> {
  protected:
   void press_action() override;
-  GrundfosAlpha3 *parent_{nullptr};
 };
 
-class GrundfosAlpha3UnpairButton : public button::Button, public Component {
- public:
-  void set_parent(GrundfosAlpha3 *parent) { parent_ = parent; }
+class GrundfosAlpha3UnpairButton : public button::Button, public Parented<GrundfosAlpha3> {
  protected:
   void press_action() override;
-  GrundfosAlpha3 *parent_{nullptr};
 };
 
 class GrundfosAlpha3 : public PollingComponent, public ble_client::BLEClientNode {
  public:
-  GrundfosAlpha3();
+  GrundfosAlpha3() : PollingComponent(10000) {}
 
-  void setup() override;
   void loop() override;
   void update() override;
   void dump_config() override;
 
   void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                            esp_ble_gattc_cb_param_t *param) override;
+  void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) override;
 
   // Sensor Setters
   void set_power_sensor(sensor::Sensor *s) { power_sensor_ = s; }
@@ -109,7 +92,7 @@ class GrundfosAlpha3 : public PollingComponent, public ble_client::BLEClientNode
   void set_control_mode_select(GrundfosAlpha3ControlModeSelect *sel) { control_mode_select_ = sel; }
   void set_setpoint_number(GrundfosAlpha3SetpointNumber *num) { setpoint_number_ = num; }
 
-  // Control Actions
+  // Control Actions (nazwy trybów muszą odpowiadać opcjom z select.py)
   void write_power(bool state);
   void write_operating_mode(const std::string &mode_str);
   void write_control_mode(const std::string &mode_str);
@@ -118,40 +101,71 @@ class GrundfosAlpha3 : public PollingComponent, public ble_client::BLEClientNode
   // Pairing Actions
   void pair_pump();
   void unpair_pump();
+  /// Odczytuje z NVS, czy pompa ma zapisaną więź (bond) i aktualizuje bonded_.
   bool is_device_bonded();
 
  protected:
-  void queue_command(const std::vector<uint8_t> &frame, bool high_priority = false);
-  void send_next_queued_command();
-  bool send_frame_ble(const std::vector<uint8_t> &frame);
+  // --- Budowanie ramek GENI ---
+  static std::vector<uint8_t> build_frame_(uint8_t apdu_class, uint8_t op, const std::vector<uint8_t> &data);
+  static std::vector<uint8_t> build_read_(uint8_t apdu_class, uint8_t id);
+  static std::vector<uint8_t> build_gep_read_(uint8_t sub_id, uint16_t obj_id);
+  static std::vector<uint8_t> build_gep_write_(uint8_t sub_id, uint16_t obj_id, uint16_t type_id,
+                                               const std::vector<uint8_t> &payload);
+  static void append_float_be_(std::vector<uint8_t> &out, float value);
 
-  void handle_rx_bytes(const uint8_t *data, size_t length);
-  void process_geni_frame(const std::vector<uint8_t> &frame);
+  // --- Sterowanie ---
+  bool can_write_(const char *action);
+  void send_operating_mode_(uint8_t op_mode);
+  void send_control_mode_(uint8_t ctrl_mode);
+  std::vector<uint8_t> build_operation_frame_(float setpoint_pa) const;
+  void publish_operating_mode_(uint8_t op_mode);
+  void publish_control_mode_(uint8_t ctrl_mode);
+  void publish_setpoint_(float setpoint_m);
 
-  static uint16_t calculate_crc16(const uint8_t *data, size_t length);
-  static float parse_float_be(const uint8_t *data);
-  static double parse_double_be(const uint8_t *data);
-  static std::string decode_alarm_code(uint8_t code);
-  static std::string decode_ctrl_mode(uint8_t code);
-  static uint8_t encode_ctrl_mode(const std::string &str);
-  static std::string decode_op_mode(uint8_t code);
-  static uint8_t encode_op_mode(const std::string &str);
+  // --- Nadawanie (nieblokujące) ---
+  void queue_command_(std::vector<uint8_t> frame, bool high_priority = false);
+  void process_tx_(uint32_t now);
+  bool send_chunk_(uint32_t now);
+
+  // --- Odbiór ---
+  void handle_rx_bytes_(const uint8_t *data, size_t length);
+  void process_geni_frame_(const std::vector<uint8_t> &frame);
+  void process_gep_reply_(const std::vector<uint8_t> &frame);
+
+  void configure_security_();
+  void reset_connection_state_();
+
+  static uint16_t calculate_crc16_(const uint8_t *data, size_t length);
+  static float parse_float_be_(const uint8_t *data);
+  static double parse_double_be_(const uint8_t *data);
+  static std::string decode_alarm_code_(uint8_t code);
+  static std::string decode_ctrl_mode_(uint8_t code);
+  static std::string decode_op_mode_(uint8_t code);
 
   uint16_t char_handle_{0};
-  uint16_t cccd_handle_{0};
   bool connected_{false};
   bool notify_registered_{false};
+  bool security_configured_{false};
+  bool bond_state_loaded_{false};
   bool was_paired_{false};
-  bool is_bonded_{false};
-  uint32_t last_pair_attempt_{0};
-  uint32_t last_bond_check_{0};
+  bool was_encrypted_{false};
+  bool bonded_{false};
   bool remote_control_initialized_{false};
+  /// true po odebraniu stanu pracy (Obj 6) w bieżącym połączeniu - dopiero wtedy wolno wysyłać zapisy.
+  bool operation_state_valid_{false};
+  uint32_t last_pair_attempt_{0};
 
+  // RX
   std::vector<uint8_t> rx_buffer_;
-  std::deque<std::vector<uint8_t>> tx_queue_;
-  uint32_t last_tx_time_{0};
-  uint32_t last_poll_step_time_{0};
-  uint8_t poll_step_{0};
+  uint32_t last_rx_time_{0};
+
+  // TX: kolejka priorytetowa (zapisy, FIFO) jest opróżniana przed kolejką odpytywania.
+  std::deque<std::vector<uint8_t>> tx_priority_queue_;
+  std::deque<std::vector<uint8_t>> tx_poll_queue_;
+  std::vector<uint8_t> tx_frame_;
+  size_t tx_offset_{0};
+  uint32_t last_tx_frame_time_{0};
+  uint32_t last_tx_chunk_time_{0};
   uint32_t poll_cycles_{0};
 
   float current_setpoint_m_{1.5f};
@@ -187,5 +201,6 @@ class GrundfosAlpha3 : public PollingComponent, public ble_client::BLEClientNode
   GrundfosAlpha3SetpointNumber *setpoint_number_{nullptr};
 };
 
-}  // namespace grundfos_alpha3
-}  // namespace esphome
+}  // namespace esphome::grundfos_alpha3
+
+#endif  // USE_ESP32

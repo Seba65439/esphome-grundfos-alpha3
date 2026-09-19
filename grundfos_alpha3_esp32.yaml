@@ -3,9 +3,8 @@ substitutions:
   friendly_name: "Pompa Grundfos ALPHA3"
   # ==============================================================================
   # IMPORTANT / WAŻNE: Enter your pump's real BLE MAC address below!
-  # If you do not know it, flash ESP32 with this code, open ESPHome Log Viewer
-  # and press the connect button on your pump - the logs will display:
-  # ">>> ZNALEZIONO POMPĘ GRUNDFOS! Adres MAC: XX:XX:XX:XX:XX:XX <<<"
+  # Wpisz prawdziwy adres MAC BLE swojej pompy (np. odczytany aplikacją
+  # nRF Connect lub z listy urządzeń Bluetooth telefonu po sparowaniu z GO Remote).
   # ==============================================================================
   pump_mac_address: "B4:E6:2D:XX:XX:XX"
 
@@ -19,29 +18,37 @@ esp32:
   framework:
     type: arduino
 
-# Poziom logów DEBUG jest kluczowy, aby widzieć wykryte urządzenia BLE i komunikaty parowania
+# Poziom DEBUG pokazuje komunikaty parowania i komunikacji z pompą.
+# Encje publikujące co cykl odpytywania są wyciszone do INFO, aby nie zaśmiecać logów.
 logger:
-  level: INFO
+  level: DEBUG
   logs:
-    grundfos_alpha3: DEBUG
+    sensor: INFO
+    binary_sensor: INFO
+    text_sensor: INFO
+    select: INFO
+    number: INFO
+    switch: INFO
 
+# Dane dostępowe trzymaj w secrets.yaml (wzór: secrets.yaml.example) - nigdy nie commituj go do repozytorium.
 api:
-  # encryption:
-  #   key: "" # Opcjonalny klucz szyfrowania Home Assistant
+  encryption:
+    key: !secret api_encryption_key
 
 ota:
   - platform: esphome
+    password: !secret ota_password
 
 wifi:
-  ssid: "TWOJA_NAZWA_WIFI"
-  password: "TWOJE_HASLO_WIFI"
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
   fast_connect: true
   power_save_mode: none  # Kluczowe przy BLE: zapobiega usypianiu modemu WiFi i zrywaniu sesji API
 
   # Fallback AP w razie braku sieci domowej
   ap:
     ssid: "Grundfos-Alpha3-Fallback"
-    password: "grundfospassword"
+    password: !secret fallback_ap_password
 
 captive_portal:
 

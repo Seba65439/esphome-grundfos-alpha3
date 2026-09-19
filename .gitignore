@@ -15,6 +15,7 @@ __pycache__/
 # Logs & temp files
 *.log
 tmp/
+AI_HANDOVER.md
 
 # Operating System & IDE artifacts
 .DS_Store

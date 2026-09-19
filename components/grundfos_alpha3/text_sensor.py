@@ -1,7 +1,9 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import text_sensor
-from . import GrundfosAlpha3, CONF_GRUNDFOS_ALPHA3_ID
+import esphome.config_validation as cv
+from esphome.const import ENTITY_CATEGORY_DIAGNOSTIC
+
+from . import CONF_GRUNDFOS_ALPHA3_ID, GrundfosAlpha3
 
 CONF_OPERATING_MODE = "operating_mode"
 CONF_CONTROL_MODE = "control_mode"
@@ -21,22 +23,23 @@ CONFIG_SCHEMA = cv.Schema(
             icon="mdi:alert",
         ),
         cv.Optional(CONF_PUMP_NAME): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             icon="mdi:tag-outline",
         ),
     }
 )
 
+TEXT_SENSORS = [
+    (CONF_OPERATING_MODE, "set_operating_mode_text_sensor"),
+    (CONF_CONTROL_MODE, "set_control_mode_text_sensor"),
+    (CONF_ALARM_STATUS, "set_alarm_status_text_sensor"),
+    (CONF_PUMP_NAME, "set_pump_name_text_sensor"),
+]
+
+
 async def to_code(config):
     parent = await cg.get_variable(config[CONF_GRUNDFOS_ALPHA3_ID])
-    
-    text_sensors_map = [
-        (CONF_OPERATING_MODE, "set_operating_mode_text_sensor"),
-        (CONF_CONTROL_MODE, "set_control_mode_text_sensor"),
-        (CONF_ALARM_STATUS, "set_alarm_status_text_sensor"),
-        (CONF_PUMP_NAME, "set_pump_name_text_sensor"),
-    ]
-    
-    for conf_key, setter_func in text_sensors_map:
+    for conf_key, setter in TEXT_SENSORS:
         if conf_key in config:
             tsens = await text_sensor.new_text_sensor(config[conf_key])
-            cg.add(getattr(parent, setter_func)(tsens))
+            cg.add(getattr(parent, setter)(tsens))

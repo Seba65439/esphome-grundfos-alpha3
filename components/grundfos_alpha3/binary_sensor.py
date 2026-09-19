@@ -1,11 +1,13 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import binary_sensor
+import esphome.config_validation as cv
 from esphome.const import (
-    DEVICE_CLASS_RUNNING,
     DEVICE_CLASS_CONNECTIVITY,
+    DEVICE_CLASS_RUNNING,
+    ENTITY_CATEGORY_DIAGNOSTIC,
 )
-from . import GrundfosAlpha3, CONF_GRUNDFOS_ALPHA3_ID
+
+from . import CONF_GRUNDFOS_ALPHA3_ID, GrundfosAlpha3
 
 CONF_PUMP_RUNNING = "pump_running"
 CONF_PUMP_PAIRED = "pump_paired"
@@ -19,10 +21,12 @@ CONFIG_SCHEMA = cv.Schema(
         ),
         cv.Optional(CONF_PUMP_PAIRED): binary_sensor.binary_sensor_schema(
             device_class=DEVICE_CLASS_CONNECTIVITY,
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             icon="mdi:bluetooth-connect",
         ),
     }
 )
+
 
 async def to_code(config):
     parent = await cg.get_variable(config[CONF_GRUNDFOS_ALPHA3_ID])

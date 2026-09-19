@@ -1,13 +1,19 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import number
-from . import GrundfosAlpha3, grundfos_alpha3_ns, CONF_GRUNDFOS_ALPHA3_ID
+import esphome.config_validation as cv
+
+from . import CONF_GRUNDFOS_ALPHA3_ID, GrundfosAlpha3, grundfos_alpha3_ns
 
 GrundfosAlpha3SetpointNumber = grundfos_alpha3_ns.class_(
-    "GrundfosAlpha3SetpointNumber", number.Number, cg.Component
+    "GrundfosAlpha3SetpointNumber", number.Number, cg.Parented.template(GrundfosAlpha3)
 )
 
 CONF_SETPOINT = "setpoint"
+
+# Zakres musi odpowiadać SETPOINT_MIN_M / SETPOINT_MAX_M w grundfos_alpha3.cpp
+SETPOINT_MIN_M = 0.5
+SETPOINT_MAX_M = 5.0
+SETPOINT_STEP_M = 0.1
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -20,15 +26,15 @@ CONFIG_SCHEMA = cv.Schema(
     }
 )
 
+
 async def to_code(config):
     parent = await cg.get_variable(config[CONF_GRUNDFOS_ALPHA3_ID])
     if CONF_SETPOINT in config:
         num = await number.new_number(
             config[CONF_SETPOINT],
-            min_value=0.5,
-            max_value=5.0,
-            step=0.1,
+            min_value=SETPOINT_MIN_M,
+            max_value=SETPOINT_MAX_M,
+            step=SETPOINT_STEP_M,
         )
-        await cg.register_component(num, config[CONF_SETPOINT])
         cg.add(num.set_parent(parent))
         cg.add(parent.set_setpoint_number(num))

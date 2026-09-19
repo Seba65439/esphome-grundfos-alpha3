@@ -1,8 +1,7 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import sensor
+import esphome.config_validation as cv
 from esphome.const import (
-    CONF_ID,
     CONF_POWER,
     CONF_SPEED,
     CONF_ENERGY,
@@ -13,6 +12,8 @@ from esphome.const import (
     DEVICE_CLASS_VOLTAGE,
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_TEMPERATURE,
+    DEVICE_CLASS_VOLUME_FLOW_RATE,
+    ENTITY_CATEGORY_DIAGNOSTIC,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
     UNIT_WATT,
@@ -20,9 +21,11 @@ from esphome.const import (
     UNIT_VOLT,
     UNIT_AMPERE,
     UNIT_CELSIUS,
+    UNIT_CUBIC_METER_PER_HOUR,
     UNIT_REVOLUTIONS_PER_MINUTE,
 )
-from . import GrundfosAlpha3, CONF_GRUNDFOS_ALPHA3_ID
+
+from . import CONF_GRUNDFOS_ALPHA3_ID, GrundfosAlpha3
 
 CONF_FLOW = "flow"
 CONF_HEAD = "head"
@@ -33,7 +36,6 @@ CONF_TEMP_MOTOR = "temp_motor"
 CONF_TEMP_LIQUID = "temp_liquid"
 CONF_ALARM_CODE = "alarm_code"
 
-UNIT_CUBIC_METERS_PER_HOUR = "m³/h"
 UNIT_METER = "m"
 
 CONFIG_SCHEMA = cv.Schema(
@@ -52,8 +54,9 @@ CONFIG_SCHEMA = cv.Schema(
             icon="mdi:fan",
         ),
         cv.Optional(CONF_FLOW): sensor.sensor_schema(
-            unit_of_measurement=UNIT_CUBIC_METERS_PER_HOUR,
+            unit_of_measurement=UNIT_CUBIC_METER_PER_HOUR,
             accuracy_decimals=2,
+            device_class=DEVICE_CLASS_VOLUME_FLOW_RATE,
             state_class=STATE_CLASS_MEASUREMENT,
             icon="mdi:water-pump",
         ),
@@ -111,34 +114,35 @@ CONFIG_SCHEMA = cv.Schema(
             device_class=DEVICE_CLASS_TEMPERATURE,
             state_class=STATE_CLASS_MEASUREMENT,
         ),
+        # Kod alarmu to wartość kategoryczna - bez state_class (bez statystyk długoterminowych w HA)
         cv.Optional(CONF_ALARM_CODE): sensor.sensor_schema(
             accuracy_decimals=0,
-            state_class=STATE_CLASS_MEASUREMENT,
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             icon="mdi:alert-circle-outline",
         ),
     }
 )
 
+SENSORS = [
+    (CONF_POWER, "set_power_sensor"),
+    (CONF_SPEED, "set_speed_sensor"),
+    (CONF_FLOW, "set_flow_sensor"),
+    (CONF_HEAD, "set_head_sensor"),
+    (CONF_CURRENT_SETPOINT, "set_current_setpoint_sensor"),
+    (CONF_ENERGY, "set_energy_sensor"),
+    (CONF_VOLTAGE, "set_voltage_sensor"),
+    (CONF_CURRENT, "set_current_sensor"),
+    (CONF_SHAFT_POWER, "set_shaft_power_sensor"),
+    (CONF_TEMP_ELECTRONICS, "set_temp_electronics_sensor"),
+    (CONF_TEMP_MOTOR, "set_temp_motor_sensor"),
+    (CONF_TEMP_LIQUID, "set_temp_liquid_sensor"),
+    (CONF_ALARM_CODE, "set_alarm_code_sensor"),
+]
+
+
 async def to_code(config):
     parent = await cg.get_variable(config[CONF_GRUNDFOS_ALPHA3_ID])
-    
-    sensors_map = [
-        (CONF_POWER, "set_power_sensor"),
-        (CONF_SPEED, "set_speed_sensor"),
-        (CONF_FLOW, "set_flow_sensor"),
-        (CONF_HEAD, "set_head_sensor"),
-        (CONF_CURRENT_SETPOINT, "set_current_setpoint_sensor"),
-        (CONF_ENERGY, "set_energy_sensor"),
-        (CONF_VOLTAGE, "set_voltage_sensor"),
-        (CONF_CURRENT, "set_current_sensor"),
-        (CONF_SHAFT_POWER, "set_shaft_power_sensor"),
-        (CONF_TEMP_ELECTRONICS, "set_temp_electronics_sensor"),
-        (CONF_TEMP_MOTOR, "set_temp_motor_sensor"),
-        (CONF_TEMP_LIQUID, "set_temp_liquid_sensor"),
-        (CONF_ALARM_CODE, "set_alarm_code_sensor"),
-    ]
-    
-    for conf_key, setter_func in sensors_map:
+    for conf_key, setter in SENSORS:
         if conf_key in config:
             sens = await sensor.new_sensor(config[conf_key])
-            cg.add(getattr(parent, setter_func)(sens))
+            cg.add(getattr(parent, setter)(sens))

@@ -1,8 +1,9 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import ble_client
+import esphome.config_validation as cv
 from esphome.const import CONF_ID
 
+CODEOWNERS = ["@Seba65439"]
 DEPENDENCIES = ["ble_client"]
 AUTO_LOAD = ["sensor", "binary_sensor", "text_sensor", "switch", "select", "number", "button"]
 MULTI_CONF = True
@@ -23,6 +24,7 @@ CONFIG_SCHEMA = (
     .extend(cv.polling_component_schema("10s"))
     .extend(ble_client.BLE_CLIENT_SCHEMA)
 )
+
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
