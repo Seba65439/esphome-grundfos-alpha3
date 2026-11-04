@@ -83,6 +83,7 @@ static const size_t TX_PRIORITY_QUEUE_MAX = 32;
 static const uint32_t RX_TIMEOUT_MS = 500;
 static const size_t RX_BUFFER_MAX = 512;
 static const uint32_t PAIR_RETRY_INTERVAL_MS = 10000;
+static const uint32_t CCCD_RETRY_INTERVAL_MS = 2000;
 static const uint32_t ENERGY_POLL_EVERY = 3;
 static const uint32_t NAME_POLL_EVERY = 10;
 
@@ -215,6 +216,14 @@ void GrundfosAlpha3::loop() {
   // Połączono, ale sesja nie jest zaszyfrowana: ponawiaj parowanie / wznowienie szyfrowania.
   if (this->connected_ && !encrypted && now - this->last_pair_attempt_ >= PAIR_RETRY_INTERVAL_MS) {
     this->pair_pump();
+  }
+
+  // Charakterystyka pompy wymaga szyfrowania - zapis CCCD wykonany przed parowaniem mógł zostać odrzucony.
+  if (this->cccd_retry_pending_ && encrypted && this->cccd_handle_ != 0 &&
+      now - this->last_cccd_attempt_ >= CCCD_RETRY_INTERVAL_MS) {
+    ESP_LOGI(TAG, "[%s] Ponawiam włączenie powiadomień (CCCD) w zaszyfrowanym połączeniu.",
+             this->parent()->address_str());
+    this->enable_notifications_();
   }
 
   // Porzuć niekompletną ramkę, jeśli reszta fragmentów nie dotarła w rozsądnym czasie.
@@ -424,13 +433,8 @@ void GrundfosAlpha3::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if
       // Włącz powiadomienia w deskryptorze CCCD (0x2902)
       auto *descr = this->parent()->get_config_descriptor(this->char_handle_);
       if (descr != nullptr) {
-        uint16_t notify_en = 1;
-        auto status = esp_ble_gattc_write_char_descr(
-            this->parent()->get_gattc_if(), this->parent()->get_conn_id(), descr->handle, sizeof(notify_en),
-            reinterpret_cast<uint8_t *>(&notify_en), ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
-        if (status != ESP_OK) {
-          ESP_LOGW(TAG, "[%s] Błąd zapisu CCCD: %d", this->parent()->address_str(), status);
-        }
+        this->cccd_handle_ = descr->handle;
+        this->enable_notifications_();
       } else {
         ESP_LOGW(TAG, "[%s] Brak deskryptora CCCD - powiadomienia mogą nie działać.", this->parent()->address_str());
       }
@@ -454,6 +458,19 @@ void GrundfosAlpha3::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if
       break;
     }
 
+    case ESP_GATTC_WRITE_DESCR_EVT: {
+      if (this->cccd_handle_ == 0 || param->write.handle != this->cccd_handle_)
+        break;
+      if (param->write.status == ESP_GATT_OK) {
+        this->cccd_retry_pending_ = false;
+      } else {
+        ESP_LOGW(TAG, "[%s] Pompa odrzuciła zapis CCCD (status: 0x%02X) - ponowię po zaszyfrowaniu połączenia.",
+                 this->parent()->address_str(), param->write.status);
+        this->cccd_retry_pending_ = true;
+      }
+      break;
+    }
+
     case ESP_GATTC_WRITE_CHAR_EVT: {
       if (param->write.status != ESP_GATT_OK) {
         ESP_LOGW(TAG, "[%s] Błąd zapisu BLE (status: 0x%02X)", this->parent()->address_str(), param->write.status);
@@ -472,6 +489,22 @@ void GrundfosAlpha3::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if
   }
 }
 
+void GrundfosAlpha3::enable_notifications_() {
+  if (this->cccd_handle_ == 0)
+    return;
+  // Wynik zapisu przychodzi w ESP_GATTC_WRITE_DESCR_EVT (tam ustawiana jest ewentualna ponowna próba).
+  this->cccd_retry_pending_ = false;
+  this->last_cccd_attempt_ = millis();
+  uint8_t notify_en[2] = {0x01, 0x00};  // CCCD: little-endian, bit 0 = notifications
+  auto status = esp_ble_gattc_write_char_descr(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                               this->cccd_handle_, sizeof(notify_en), notify_en,
+                                               ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+  if (status != ESP_OK) {
+    ESP_LOGW(TAG, "[%s] Błąd zapisu CCCD: %d", this->parent()->address_str(), status);
+    this->cccd_retry_pending_ = true;
+  }
+}
+
 void GrundfosAlpha3::reset_connection_state_() {
   const bool was_connected = this->connected_;
   this->connected_ = false;
@@ -479,6 +512,8 @@ void GrundfosAlpha3::reset_connection_state_() {
   this->remote_control_initialized_ = false;
   this->operation_state_valid_ = false;
   this->char_handle_ = 0;
+  this->cccd_handle_ = 0;
+  this->cccd_retry_pending_ = false;
   this->rx_buffer_.clear();
   this->tx_priority_queue_.clear();
   this->tx_poll_queue_.clear();
@@ -646,6 +681,9 @@ void GrundfosAlpha3::process_geni_frame_(const std::vector<uint8_t> &frame) {
 
   // Klasa 5: Alarmy i ostrzeżenia
   if (apdu_class == GENI_CLASS_ALARM) {
+    // APDU bez danych (np. potwierdzenie) - frame[6] byłby wtedy bajtem CRC, a nie kodem alarmu
+    if (apdu_len < 1 || data_end <= 6)
+      return;
     const uint8_t alarm_code = frame[6];
     if (this->alarm_code_sensor_ != nullptr) {
       this->alarm_code_sensor_->publish_state(alarm_code);
@@ -759,6 +797,8 @@ void GrundfosAlpha3::process_gep_reply_(const std::vector<uint8_t> &frame) {
       this->publish_operating_mode_(data[1]);
       this->publish_control_mode_(data[2]);
 
+      this->current_setpoint_raw_ = (static_cast<uint32_t>(data[3]) << 24) | (static_cast<uint32_t>(data[4]) << 16) |
+                                    (static_cast<uint32_t>(data[5]) << 8) | static_cast<uint32_t>(data[6]);
       const float setpoint_pa = parse_float_be_(&data[3]);
       if (!std::isnan(setpoint_pa) && setpoint_pa > 0.0f) {
         this->current_setpoint_m_ = setpoint_pa / PA_PER_METER;
@@ -851,11 +891,12 @@ void GrundfosAlpha3::write_setpoint(float setpoint_m) {
 
   // Kolejność na magistrali (sprawdzona na pompie): najpierw Obj 6 z nową nastawą - to ta ramka
   // bezpośrednio zmienia punkt pracy ALPHA3 w bieżącym trybie - a potem rejestr nastawy Obj 16.
-  this->queue_command_(this->build_operation_frame_(setpoint_pa), true);
+  this->current_setpoint_raw_ = float_to_raw_(setpoint_pa);
+  this->queue_command_(this->build_operation_frame_(this->current_setpoint_raw_), true);
 
   // Obj 16 (18 B): 00 04 [FLOAT_SETPOINT_PA] 3F000000 41000000 00000000
   std::vector<uint8_t> payload = {0x00, 0x04};
-  append_float_be_(payload, setpoint_pa);
+  append_u32_be_(payload, this->current_setpoint_raw_);
   payload.insert(payload.end(), {0x3F, 0x00, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
   this->queue_command_(build_gep_write_(GEP_SUB_CONTROL, GEP_OBJ_SETPOINT, GEP_TYPE_SETPOINT, payload), true);
 }
@@ -864,7 +905,8 @@ void GrundfosAlpha3::send_operating_mode_(uint8_t op_mode) {
   this->current_op_mode_ = op_mode;
   ESP_LOGI(TAG, "Wysyłanie nowego stanu pracy: %s (kod 0x%02X)", decode_op_mode_(op_mode).c_str(), op_mode);
   this->publish_operating_mode_(op_mode);
-  this->queue_command_(this->build_operation_frame_(this->current_setpoint_m_ * PA_PER_METER), true);
+  // Nastawa odsyłana bez zmian (surowe bajty z pompy) - zmiana trybu nie może jej modyfikować.
+  this->queue_command_(this->build_operation_frame_(this->current_setpoint_raw_), true);
 }
 
 void GrundfosAlpha3::send_control_mode_(uint8_t ctrl_mode) {
@@ -881,10 +923,10 @@ void GrundfosAlpha3::send_control_mode_(uint8_t ctrl_mode) {
   this->queue_command_(build_gep_read_(GEP_SUB_CONTROL, GEP_OBJ_CONTROL_MODE));
 }
 
-std::vector<uint8_t> GrundfosAlpha3::build_operation_frame_(float setpoint_pa) const {
+std::vector<uint8_t> GrundfosAlpha3::build_operation_frame_(uint32_t setpoint_raw) const {
   // Obj 6: 00 [OP_MODE] [CTRL_MODE] [FLOAT_SETPOINT_PA]
   std::vector<uint8_t> payload = {0x00, this->current_op_mode_, this->current_ctrl_mode_};
-  append_float_be_(payload, setpoint_pa);
+  append_u32_be_(payload, setpoint_raw);
   return build_gep_write_(GEP_SUB_CONTROL, GEP_OBJ_OPERATION, GEP_TYPE_OPERATION, payload);
 }
 
@@ -896,8 +938,9 @@ void GrundfosAlpha3::publish_operating_mode_(uint8_t op_mode) {
   if (this->operating_mode_select_ != nullptr && find_mode_name(OPERATING_MODES, op_mode) != nullptr) {
     this->operating_mode_select_->publish_state(mode_str);
   }
+  // Pompa pracuje w każdym stanie poza "Stop" (także Min / Maks)
   if (this->power_switch_ != nullptr) {
-    this->power_switch_->publish_state(op_mode == OP_MODE_NORMAL);
+    this->power_switch_->publish_state(op_mode != OP_MODE_STOP);
   }
 }
 
@@ -966,9 +1009,13 @@ std::vector<uint8_t> GrundfosAlpha3::build_gep_write_(uint8_t sub_id, uint16_t o
   return build_frame_(GENI_CLASS_GEP, GENI_OP_SET, data);
 }
 
-void GrundfosAlpha3::append_float_be_(std::vector<uint8_t> &out, float value) {
+uint32_t GrundfosAlpha3::float_to_raw_(float value) {
   uint32_t raw;
   memcpy(&raw, &value, sizeof(raw));
+  return raw;
+}
+
+void GrundfosAlpha3::append_u32_be_(std::vector<uint8_t> &out, uint32_t raw) {
   out.push_back(static_cast<uint8_t>(raw >> 24));
   out.push_back(static_cast<uint8_t>(raw >> 16));
   out.push_back(static_cast<uint8_t>(raw >> 8));

@@ -41,7 +41,7 @@ Text sensors: `operating_mode`, `control_mode`, `alarm_status` (human-readable a
 
 ### Control
 
-- **`pump_power` switch** – `ON` → `Normalny` (normal operation), `OFF` → `Stop`.
+- **`pump_power` switch** – `ON` → `Normalny` (normal operation), `OFF` → `Stop`. The switch reports `ON` in every state except `Stop` (also `Min` / `Maks`).
 - **`operating_mode` select**
 
   | Option | Meaning |
