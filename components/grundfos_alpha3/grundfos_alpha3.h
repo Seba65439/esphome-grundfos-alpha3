@@ -14,6 +14,7 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/button/button.h"
 
+#include <cmath>
 #include <deque>
 #include <string>
 #include <vector>
@@ -111,13 +112,14 @@ class GrundfosAlpha3 : public PollingComponent, public ble_client::BLEClientNode
   static std::vector<uint8_t> build_gep_read_(uint8_t sub_id, uint16_t obj_id);
   static std::vector<uint8_t> build_gep_write_(uint8_t sub_id, uint16_t obj_id, uint16_t type_id,
                                                const std::vector<uint8_t> &payload);
-  static void append_float_be_(std::vector<uint8_t> &out, float value);
+  static void append_u32_be_(std::vector<uint8_t> &out, uint32_t value);
+  static uint32_t float_to_raw_(float value);
 
   // --- Sterowanie ---
   bool can_write_(const char *action);
   void send_operating_mode_(uint8_t op_mode);
   void send_control_mode_(uint8_t ctrl_mode);
-  std::vector<uint8_t> build_operation_frame_(float setpoint_pa) const;
+  std::vector<uint8_t> build_operation_frame_(uint32_t setpoint_raw) const;
   void publish_operating_mode_(uint8_t op_mode);
   void publish_control_mode_(uint8_t ctrl_mode);
   void publish_setpoint_(float setpoint_m);
@@ -133,6 +135,7 @@ class GrundfosAlpha3 : public PollingComponent, public ble_client::BLEClientNode
   void process_gep_reply_(const std::vector<uint8_t> &frame);
 
   void configure_security_();
+  void enable_notifications_();
   void reset_connection_state_();
 
   static uint16_t calculate_crc16_(const uint8_t *data, size_t length);
@@ -143,6 +146,10 @@ class GrundfosAlpha3 : public PollingComponent, public ble_client::BLEClientNode
   static std::string decode_op_mode_(uint8_t code);
 
   uint16_t char_handle_{0};
+  uint16_t cccd_handle_{0};
+  /// Zapis CCCD odrzucony (np. brak szyfrowania) - ponów po zaszyfrowaniu połączenia.
+  bool cccd_retry_pending_{false};
+  uint32_t last_cccd_attempt_{0};
   bool connected_{false};
   bool notify_registered_{false};
   bool security_configured_{false};
@@ -168,7 +175,10 @@ class GrundfosAlpha3 : public PollingComponent, public ble_client::BLEClientNode
   uint32_t last_tx_chunk_time_{0};
   uint32_t poll_cycles_{0};
 
-  float current_setpoint_m_{1.5f};
+  float current_setpoint_m_{NAN};
+  /// Surowe bajty nastawy (float BE) z ostatniej odpowiedzi Obj 6 - odsyłane bez zmian przy zmianie trybu,
+  /// aby nie nadpisać nastawy pompy wartością domyślną lub zaokrągloną.
+  uint32_t current_setpoint_raw_{0};
   uint8_t current_op_mode_{0};
   uint8_t current_ctrl_mode_{0};
 

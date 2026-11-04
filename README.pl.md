@@ -34,7 +34,7 @@ Sensory tekstowe: `operating_mode`, `control_mode`, `alarm_status` (opis alarmu)
 
 ### Sterowanie
 
-- **Przełącznik `pump_power`** – `ON` → `Normalny`, `OFF` → `Stop`.
+- **Przełącznik `pump_power`** – `ON` → `Normalny`, `OFF` → `Stop`. Przełącznik pokazuje `ON` w każdym stanie poza `Stop` (także `Min` / `Maks`).
 - **Select `operating_mode`**: `Normalny`, `Stop`, `Min` (krzywa minimalna), `Maks` (krzywa maksymalna – odpowietrzanie, szybkie dogrzanie).
 - **Select `control_mode`**: `Ciśnienie stałe`, `Ciśnienie proporcjonalne`, `Charakterystyka stała`, `Tryb grzejnikowy`, `Tryb ogrzewania podłogowego`, `Grzejnikowe i podłogowe`.
 - **Suwak `setpoint`** – nastawa wysokości podnoszenia **0,5 m – 5,0 m**, krok 0,1 m.
